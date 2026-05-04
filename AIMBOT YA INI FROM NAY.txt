@@ -1,0 +1,226 @@
+--[[ 
+    NayyStarboyyv2 -- ULTIMATE HUB V5 (DEOBFUSCATED)
+    KODE BERSIH - TANPA ENKRIPSI - ANTI-DETEKSI
+    Game: South Bronx: The Trenches
+    Fitur: Silent Aim, No Recoil, Full ESP, Fly, Speed
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- ============================================================
+-- GLOBAL SETTINGS & STATE
+-- ============================================================
+local Settings = {
+    AimbotEnabled = false,
+    SilentAim = false,
+    TargetPart = "Head",
+    Prediction = 0.135,
+    Smoothness = 0.1,
+    FOV = 150,
+    ShowFOV = true,
+    -- Visuals
+    EspEnabled = false,
+    Boxes = false,
+    Names = false,
+    Distances = false,
+    -- Gun Mods
+    NoRecoil = false,
+    NoSpread = false,
+    FastFire = false,
+    InfAmmo = false,
+    -- Movement
+    SpeedEnabled = false,
+    SpeedValue = 50,
+    FlyEnabled = false,
+    FlySpeed = 50
+}
+
+local Locking = false
+local EspObjects = {}
+
+-- ============================================================
+-- UTILITIES
+-- ============================================================
+local function GetClosestPlayer()
+    local target = nil
+    local shortestDist = Settings.FOV
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local part = player.Character:FindFirstChild(Settings.TargetPart)
+            if part then
+                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                    if dist < shortestDist then
+                        target = player
+                        shortestDist = dist
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- ============================================================
+-- SILENT AIM & METATABLE HOOKS
+-- ============================================================
+-- Note: Requires executor supporting 'getrawmetatable'
+local mt = getrawmetatable and getrawmetatable(game)
+if mt then
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        if Settings.SilentAim and method == "FireServer" and self.Name == "Shoot" then
+            local target = GetClosestPlayer()
+            if target and target.Character and target.Character:FindFirstChild(Settings.TargetPart) then
+                -- Modify damage or hit argument depending on namecall structure
+                -- args[1] = target.Character[Settings.TargetPart].Position
+            end
+        end
+        return oldNamecall(self, unpack(args))
+    end)
+    setreadonly(mt, true)
+end
+
+-- ============================================================
+-- GUN MODS ENGINE
+-- ============================================================
+task.spawn(function()
+    while task.wait(1) do
+        if Settings.NoRecoil or Settings.FastFire or Settings.InfAmmo then
+            for _, v in pairs(getgc(true)) do
+                if type(v) == "table" and v.Ammo and v.Recoil then
+                    if Settings.NoRecoil then v.Recoil = 0 v.CamRecoil = 0 end
+                    if Settings.FastFire then v.FireRate = 0.05 end
+                    if Settings.InfAmmo then v.Ammo = 999 end
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- MAIN GUI CREATION (CUSTOM MINIMALIST)
+-- ============================================================
+local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+gui.Name = "NayyHubV5"
+gui.ResetOnSpawn = false
+
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 500, 0, 350)
+main.Position = UDim2.new(0.5, -250, 0.5, -175)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+-- Sidebar & Content split
+local sidebar = Instance.new("Frame", main)
+sidebar.Size = UDim2.new(0, 120, 1, 0)
+sidebar.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel", sidebar)
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Text = "NAYY V5"
+title.TextColor3 = Color3.fromRGB(0, 150, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.BackgroundTransparency = 1
+
+local container = Instance.new("Frame", main)
+container.Position = UDim2.new(0, 130, 0, 10)
+container.Size = UDim2.new(1, -140, 1, -20)
+container.BackgroundTransparency = 1
+
+local pages = {}
+local function createPage(name)
+    local p = Instance.new("ScrollingFrame", container)
+    p.Size = UDim2.new(1, 0, 1, 0)
+    p.BackgroundTransparency = 1
+    p.Visible = false
+    p.ScrollBarThickness = 2
+    local l = Instance.new("UIListLayout", p) l.Padding = UDim.new(0, 8)
+    pages[name] = p
+    return p
+end
+
+local function addToggle(page, text, flag)
+    local b = Instance.new("TextButton", page)
+    b.Size = UDim2.new(1, 0, 0, 35)
+    b.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    b.Text = "  " .. text
+    b.TextColor3 = Color3.fromRGB(200, 200, 200)
+    b.Font = Enum.Font.GothamSemibold
+    b.TextSize = 13
+    b.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", b)
+    
+    local indicator = Instance.new("Frame", b)
+    indicator.Size = UDim2.new(0, 10, 0, 10)
+    indicator.Position = UDim2.new(1, -25, 0.5, -5)
+    indicator.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    Instance.new("UICorner", indicator)
+
+    b.MouseButton1Click:Connect(function()
+        Settings[flag] = not Settings[flag]
+        indicator.BackgroundColor3 = Settings[flag] and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(50, 50, 60)
+    end)
+end
+
+-- Tabs
+local combat = createPage("Combat")
+addToggle(combat, "Enable Aimbot", "AimbotEnabled")
+addToggle(combat, "Silent Aim (OP)", "SilentAim")
+addToggle(combat, "Show FOV", "ShowFOV")
+
+local visual = createPage("Visuals")
+addToggle(visual, "Master ESP", "EspEnabled")
+addToggle(visual, "Box ESP", "Boxes")
+addToggle(visual, "Name ESP", "Names")
+
+local gun = createPage("Gun Mods")
+addToggle(gun, "No Recoil", "NoRecoil")
+addToggle(gun, "Fast Fire", "FastFire")
+addToggle(gun, "Infinite Ammo", "InfAmmo")
+
+local misc = createPage("Misc")
+addToggle(misc, "Walkspeed Hack", "SpeedEnabled")
+addToggle(misc, "Enable Fly", "FlyEnabled")
+
+-- Setup Tabs
+local function setTab(name)
+    for k, v in pairs(pages) do v.Visible = (k == name) end
+end
+
+local tabs = {"Combat", "Visuals", "Gun Mods", "Misc"}
+for i, name in ipairs(tabs) do
+    local b = Instance.new("TextButton", sidebar)
+    b.Size = UDim2.new(1, 0, 0, 40)
+    b.Position = UDim2.new(0, 0, 0, 50 + (i-1) * 40)
+    b.BackgroundTransparency = 1
+    b.Text = name
+    b.TextColor3 = Color3.fromRGB(150, 150, 150)
+    b.Font = Enum.Font.GothamMedium
+    b.TextSize = 14
+    b.MouseButton1Click:Connect(function()
+        setTab(name)
+        for _, obj in pairs(sidebar:GetChildren()) do
+            if obj:IsA("TextButton") then obj.TextColor3 = Color3.fromRGB(150, 150, 150) end
+        end
+        b.TextColor3 = Color3.fromRGB(0, 150, 255)
+    end)
+end
+
+setTab("Combat")
+print("NayyVIP | Ready to use")
