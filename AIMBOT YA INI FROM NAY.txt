@@ -1,5 +1,9 @@
---[[ 
-    NayyUniversal -- ULTIMATE UNIVERSAL HUB V6
+// src/App.tsx
+
+// ... (imports and state)
+
+  const luaScript = `--[[ 
+    NayyUniversal -- ULTIMATE UNIVERSAL HUB V7
     KODE BERSIH - TANPA ENKRIPSI - PERFORMA MAKSIMAL
     Fitur: Advanced Aimbot, Silent Aim, Full ESP, Universal Movement
     Supported: PC & MOBILE
@@ -20,10 +24,9 @@ local Settings = {
     AimbotEnabled = false,
     SilentAim = false,
     TargetPart = "Head",
-    Prediction = 0.135,
     Smoothness = 0.1,
     FOV = 150,
-    ShowFOV = true,
+    ShowFOV = false,
     -- Visuals
     EspEnabled = false,
     Boxes = false,
@@ -36,8 +39,6 @@ local Settings = {
     SpeedValue = 50,
     JumpEnabled = false,
     JumpValue = 100,
-    FlyEnabled = false,
-    FlySpeed = 50,
     Noclip = false,
     InfiniteJump = false
 }
@@ -116,21 +117,22 @@ Players.PlayerRemoving:Connect(RemoveEsp)
 -- ============================================================
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1
-FOVCircle.Transparency = 0.7
+FOVCircle.NumSides = 100
+FOVCircle.Transparency = 1
 FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Filled = false
 
 RunService.RenderStepped:Connect(function()
-    -- FOV Update
-    FOVCircle.Visible = Settings.ShowFOV and (Settings.AimbotEnabled or Settings.SilentAim)
+    -- FOV Update (Fixing FOV Offset)
+    FOVCircle.Visible = Settings.ShowFOV
     FOVCircle.Radius = Settings.FOV
     FOVCircle.Position = UserInputService:GetMouseLocation()
 
-    -- Aimbot Logic
+    -- Aimbot Logic (Removed Prediction)
     if Settings.AimbotEnabled and Locking then
         local target = GetClosestPlayer()
         if target then
-            local predPos = target.Position + (target.Velocity * Settings.Prediction)
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, predPos), Settings.Smoothness)
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, target.Position), Settings.Smoothness)
         end
     end
 
@@ -187,9 +189,8 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================
--- MISC & HOOKS
+-- SILENT AIM HOOK (FIXED)
 -- ============================================================
--- Silent Aim Hook
 local mt = getrawmetatable and getrawmetatable(game)
 if mt then
     local oldNamecall = mt.__namecall
@@ -197,11 +198,19 @@ if mt then
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
-        if Settings.SilentAim and method == "FindPartOnRayWithIgnoreList" then
-            local target = GetClosestPlayer()
-            if target then
-                -- This is a generic return mod, works on some raycast systems
-                -- table.insert(args, target.Position)
+        
+        if Settings.SilentAim and not checkcaller() then
+            if method == "FindPartOnRayWithIgnoreList" or method == "Raycast" or method == "FindPartOnRay" then
+                local target = GetClosestPlayer()
+                if target then
+                    -- Redirection of the ray to the target's position
+                    if method == "Raycast" then
+                        args[2] = (target.Position - args[1]).Unit * 1000
+                    else
+                        args[1] = Ray.new(Camera.CFrame.Position, (target.Position - Camera.CFrame.Position).Unit * 1000)
+                    end
+                    return oldNamecall(self, unpack(args))
+                end
             end
         end
         return oldNamecall(self, unpack(args))
@@ -221,18 +230,11 @@ UserInputService.InputEnded:Connect(function(i, g)
     if i.KeyCode == Enum.KeyCode.E then Locking = false end
 end)
 
--- Anti AFK
-LocalPlayer.Idled:Connect(function()
-    game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), Camera.CFrame)
-    task.wait(1)
-    game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), Camera.CFrame)
-end)
-
 -- ============================================================
 -- UI INTERFACE
 -- ============================================================
 local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-gui.Name = "NayyUniversalHub"
+gui.Name = "NayyStarboy"
 gui.ResetOnSpawn = false
 
 local main = Instance.new("Frame", gui)
@@ -242,6 +244,43 @@ main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 main.Active = true
 main.Draggable = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+-- Header Buttons
+local minimize = Instance.new("TextButton", main)
+minimize.Size = UDim2.new(0, 25, 0, 25)
+minimize.Position = UDim2.new(1, -60, 0, 10)
+minimize.Text = "-"
+minimize.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimize.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+minimize.Font = Enum.Font.GothamBold
+minimize.TextSize = 20
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 5)
+
+local close = Instance.new("TextButton", main)
+close.Size = UDim2.new(0, 25, 0, 25)
+close.Position = UDim2.new(1, -30, 0, 10)
+close.Text = "x"
+close.TextColor3 = Color3.fromRGB(200, 200, 200)
+close.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 16
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 5)
+
+local isMinimized = false
+minimize.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    main:TweenSize(isMinimized and UDim2.new(0, 500, 0, 45) or UDim2.new(0, 500, 0, 350), "Out", "Quint", 0.5, true)
+    container.Visible = not isMinimized
+    minimize.Text = isMinimized and "+" or "-"
+end)
+
+close.MouseButton1Click:Connect(function()
+    gui:Destroy()
+    FOVCircle:Remove()
+    for _, obs in pairs(EspObjects) do
+        for _, obj in pairs(obs) do obj:Remove() end
+    end
+end)
 
 local sidebar = Instance.new("Frame", main)
 sidebar.Size = UDim2.new(0, 120, 1, 0)
@@ -254,13 +293,14 @@ title.Text = "NAYY UNIVER"
 title.TextColor3 = Color3.fromRGB(255, 50, 50)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
-title.BackgroundTransparency = 1
+title.BackgroundTransparencey = 1
 
 local container = Instance.new("Frame", main)
 container.Position = UDim2.new(0, 130, 0, 10)
 container.Size = UDim2.new(1, -140, 1, -20)
 container.BackgroundTransparency = 1
 
+-- Pages
 local pages = {}
 local function createPage(name)
     local p = Instance.new("ScrollingFrame", container)
@@ -296,7 +336,6 @@ local function addToggle(page, text, flag)
     end)
 end
 
--- Pages
 local combat = createPage("Combat")
 addToggle(combat, "Aimbot [E]", "AimbotEnabled")
 addToggle(combat, "Silent Aim", "SilentAim")
@@ -332,4 +371,4 @@ for i, name in ipairs(tabs) do
 end
 
 pages["Combat"].Visible = true
-print("Nayy Universal V6 Loaded")
+print("Nayy Universal V7 Loaded")`;
