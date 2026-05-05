@@ -1,0 +1,374 @@
+// src/App.tsx
+
+// ... (imports and state)
+
+  const luaScript = `--[[ 
+    NayyUniversal -- ULTIMATE UNIVERSAL HUB V7
+    KODE BERSIH - TANPA ENKRIPSI - PERFORMA MAKSIMAL
+    Fitur: Advanced Aimbot, Silent Aim, Full ESP, Universal Movement
+    Supported: PC & MOBILE
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- ============================================================
+-- GLOBAL SETTINGS & STATE
+-- ============================================================
+local Settings = {
+    -- Combat
+    AimbotEnabled = false,
+    SilentAim = false,
+    TargetPart = "Head",
+    Smoothness = 0.1,
+    FOV = 150,
+    ShowFOV = false,
+    -- Visuals
+    EspEnabled = false,
+    Boxes = false,
+    Names = false,
+    Tracers = false,
+    Distances = false,
+    TeamCheck = false,
+    -- Movement
+    SpeedEnabled = false,
+    SpeedValue = 50,
+    JumpEnabled = false,
+    JumpValue = 100,
+    Noclip = false,
+    InfiniteJump = false
+}
+
+local Locking = false
+local EspObjects = {}
+
+-- ============================================================
+-- UTILITIES
+-- ============================================================
+local function GetClosestPlayer()
+    local target = nil
+    local shortestDist = Settings.FOV
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            if Settings.TeamCheck and player.Team == LocalPlayer.Team then continue end
+            
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local part = player.Character:FindFirstChild(Settings.TargetPart)
+            
+            if humanoid and humanoid.Health > 0 and part then
+                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local mouseLoc = UserInputService:GetMouseLocation()
+                    local dist = (Vector2.new(pos.X, pos.Y) - mouseLoc).Magnitude
+                    if dist < shortestDist then
+                        target = part
+                        shortestDist = dist
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- ============================================================
+-- ESP ENGINE
+-- ============================================================
+local function CreateEsp(player)
+    local objects = {
+        Box = Drawing.new("Square"),
+        Name = Drawing.new("Text"),
+        Tracer = Drawing.new("Line")
+    }
+    
+    objects.Box.Thickness = 1
+    objects.Box.Filled = false
+    objects.Box.Color = Color3.fromRGB(255, 255, 255)
+    
+    objects.Name.Size = 14
+    objects.Name.Center = true
+    objects.Name.Outline = true
+    objects.Name.Color = Color3.fromRGB(255, 255, 255)
+    
+    objects.Tracer.Thickness = 1
+    objects.Tracer.Color = Color3.fromRGB(255, 255, 255)
+    
+    EspObjects[player] = objects
+end
+
+local function RemoveEsp(player)
+    if EspObjects[player] then
+        for _, obj in pairs(EspObjects[player]) do obj:Remove() end
+        EspObjects[player] = nil
+    end
+end
+
+for _, v in pairs(Players:GetPlayers()) do if v ~= LocalPlayer then CreateEsp(v) end end
+Players.PlayerAdded:Connect(CreateEsp)
+Players.PlayerRemoving:Connect(RemoveEsp)
+
+-- ============================================================
+-- MAIN LOOP (COMBAT & VISUALS)
+-- ============================================================
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 100
+FOVCircle.Transparency = 1
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Filled = false
+
+RunService.RenderStepped:Connect(function()
+    -- FOV Update (Fixing FOV Offset)
+    FOVCircle.Visible = Settings.ShowFOV
+    FOVCircle.Radius = Settings.FOV
+    FOVCircle.Position = UserInputService:GetMouseLocation()
+
+    -- Aimbot Logic (Removed Prediction)
+    if Settings.AimbotEnabled and Locking then
+        local target = GetClosestPlayer()
+        if target then
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, target.Position), Settings.Smoothness)
+        end
+    end
+
+    -- ESP Rendering
+    for player, objects in pairs(EspObjects) do
+        local char = player.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if Settings.EspEnabled and hum and hum.Health > 0 and hrp then
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            local dist = (hrp.Position - Camera.CFrame.Position).Magnitude
+            
+            if onScreen then
+                local size = (Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.6, 0)).Y)
+                
+                if Settings.Boxes then
+                    objects.Box.Visible = true
+                    objects.Box.Size = Vector2.new(size * 0.6, size)
+                    objects.Box.Position = Vector2.new(pos.X - objects.Box.Size.X / 2, pos.Y - size / 2)
+                else objects.Box.Visible = false end
+                
+                if Settings.Names then
+                    objects.Name.Visible = true
+                    objects.Name.Text = player.Name .. (Settings.Distances and (" ["..math.floor(dist).."m]") or "")
+                    objects.Name.Position = Vector2.new(pos.X, pos.Y - size / 2 - 15)
+                else objects.Name.Visible = false end
+                
+                if Settings.Tracers then
+                    objects.Tracer.Visible = true
+                    objects.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    objects.Tracer.To = Vector2.new(pos.X, pos.Y)
+                else objects.Tracer.Visible = false end
+            else
+                for _, v in pairs(objects) do v.Visible = false end
+            end
+        else
+            for _, v in pairs(objects) do v.Visible = false end
+        end
+    end
+
+    -- Movement Updates
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        local hum = LocalPlayer.Character.Humanoid
+        if Settings.SpeedEnabled then hum.WalkSpeed = Settings.SpeedValue end
+        if Settings.JumpEnabled then hum.JumpPower = Settings.JumpValue end
+        
+        if Settings.Noclip then
+            for _, v in pairs(LocalPlayer.Character:GetChildren()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- SILENT AIM HOOK (FIXED)
+-- ============================================================
+local mt = getrawmetatable and getrawmetatable(game)
+if mt then
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+        
+        if Settings.SilentAim and not checkcaller() then
+            if method == "FindPartOnRayWithIgnoreList" or method == "Raycast" or method == "FindPartOnRay" then
+                local target = GetClosestPlayer()
+                if target then
+                    -- Redirection of the ray to the target's position
+                    if method == "Raycast" then
+                        args[2] = (target.Position - args[1]).Unit * 1000
+                    else
+                        args[1] = Ray.new(Camera.CFrame.Position, (target.Position - Camera.CFrame.Position).Unit * 1000)
+                    end
+                    return oldNamecall(self, unpack(args))
+                end
+            end
+        end
+        return oldNamecall(self, unpack(args))
+    end)
+    setreadonly(mt, true)
+end
+
+-- Input Listeners
+UserInputService.InputBegan:Connect(function(i, g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.E then Locking = true end
+    if i.KeyCode == Enum.KeyCode.Space and Settings.InfiniteJump then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+    end
+end)
+UserInputService.InputEnded:Connect(function(i, g)
+    if i.KeyCode == Enum.KeyCode.E then Locking = false end
+end)
+
+-- ============================================================
+-- UI INTERFACE
+-- ============================================================
+local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+gui.Name = "NayyUniversalHubV7"
+gui.ResetOnSpawn = false
+
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 500, 0, 350)
+main.Position = UDim2.new(0.5, -250, 0.5, -175)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+main.Active = true
+main.Draggable = true
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+-- Header Buttons
+local minimize = Instance.new("TextButton", main)
+minimize.Size = UDim2.new(0, 25, 0, 25)
+minimize.Position = UDim2.new(1, -60, 0, 10)
+minimize.Text = "-"
+minimize.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimize.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+minimize.Font = Enum.Font.GothamBold
+minimize.TextSize = 20
+Instance.new("UICorner", minimize).CornerRadius = UDim.new(0, 5)
+
+local close = Instance.new("TextButton", main)
+close.Size = UDim2.new(0, 25, 0, 25)
+close.Position = UDim2.new(1, -30, 0, 10)
+close.Text = "x"
+close.TextColor3 = Color3.fromRGB(200, 200, 200)
+close.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 16
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 5)
+
+local isMinimized = false
+minimize.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    main:TweenSize(isMinimized and UDim2.new(0, 500, 0, 45) or UDim2.new(0, 500, 0, 350), "Out", "Quint", 0.5, true)
+    container.Visible = not isMinimized
+    minimize.Text = isMinimized and "+" or "-"
+end)
+
+close.MouseButton1Click:Connect(function()
+    gui:Destroy()
+    FOVCircle:Remove()
+    for _, obs in pairs(EspObjects) do
+        for _, obj in pairs(obs) do obj:Remove() end
+    end
+end)
+
+local sidebar = Instance.new("Frame", main)
+sidebar.Size = UDim2.new(0, 120, 1, 0)
+sidebar.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel", sidebar)
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Text = "NAYY UNIVER"
+title.TextColor3 = Color3.fromRGB(255, 50, 50)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.BackgroundTransparencey = 1
+
+local container = Instance.new("Frame", main)
+container.Position = UDim2.new(0, 130, 0, 10)
+container.Size = UDim2.new(1, -140, 1, -20)
+container.BackgroundTransparency = 1
+
+-- Pages
+local pages = {}
+local function createPage(name)
+    local p = Instance.new("ScrollingFrame", container)
+    p.Size = UDim2.new(1, 0, 1, 0)
+    p.BackgroundTransparency = 1
+    p.Visible = false
+    p.ScrollBarThickness = 1
+    Instance.new("UIListLayout", p).Padding = UDim.new(0, 5)
+    pages[name] = p
+    return p
+end
+
+local function addToggle(page, text, flag)
+    local b = Instance.new("TextButton", page)
+    b.Size = UDim2.new(1, 0, 0, 32)
+    b.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    b.Text = "  " .. text
+    b.TextColor3 = Color3.fromRGB(220, 220, 220)
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 12
+    b.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", b)
+    
+    local ind = Instance.new("Frame", b)
+    ind.Size = UDim2.new(0, 8, 0, 8)
+    ind.Position = UDim2.new(1, -20, 0.5, -4)
+    ind.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    Instance.new("UICorner", ind).CornerRadius = UDim.new(1, 0)
+
+    b.MouseButton1Click:Connect(function()
+        Settings[flag] = not Settings[flag]
+        ind.BackgroundColor3 = Settings[flag] and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(60, 60, 70)
+    end)
+end
+
+local combat = createPage("Combat")
+addToggle(combat, "Aimbot [E]", "AimbotEnabled")
+addToggle(combat, "Silent Aim", "SilentAim")
+addToggle(combat, "Show FOV", "ShowFOV")
+addToggle(combat, "Team Check", "TeamCheck")
+
+local visual = createPage("Visuals")
+addToggle(visual, "Master ESP", "EspEnabled")
+addToggle(visual, "Boxes", "Boxes")
+addToggle(visual, "Names", "Names")
+addToggle(visual, "Tracers", "Tracers")
+addToggle(visual, "Distances", "Distances")
+
+local move = createPage("Movement")
+addToggle(move, "Speed Hack", "SpeedEnabled")
+addToggle(move, "Jump Hack", "JumpEnabled")
+addToggle(move, "Noclip", "Noclip")
+addToggle(move, "Infinite Jump", "InfiniteJump")
+
+local tabs = {"Combat", "Visuals", "Movement"}
+for i, name in ipairs(tabs) do
+    local b = Instance.new("TextButton", sidebar)
+    b.Size = UDim2.new(1, 0, 0, 35)
+    b.Position = UDim2.new(0, 0, 0, 50 + (i-1)*35)
+    b.BackgroundTransparency = 1
+    b.Text = name
+    b.TextColor3 = Color3.fromRGB(200, 200, 200)
+    b.Font = Enum.Font.GothamMedium
+    b.TextSize = 13
+    b.MouseButton1Click:Connect(function()
+        for k, v in pairs(pages) do v.Visible = (k == name) end
+    end)
+end
+
+pages["Combat"].Visible = true
+print("Nayy Universal V7 Loaded")`;
