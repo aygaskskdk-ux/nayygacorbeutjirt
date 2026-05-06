@@ -1,7 +1,7 @@
 --[[ 
-    NayyUniversal -- ULTIMATE UNIVERSAL HUB V7
+    NayyUniversal -- ULTIMATE UNIVERSAL HUB V8
     KODE BERSIH - TANPA ENKRIPSI - PERFORMA MAKSIMAL
-    Fitur: Advanced Aimbot, Silent Aim, Full ESP, Universal Movement
+    Fitur: Advanced Aimbot, Silent Aim, Highlight ESP, Universal Movement
     Supported: PC & MOBILE
 ]]
 
@@ -25,11 +25,13 @@ local Settings = {
     ShowFOV = true,
     -- Visuals
     EspEnabled = false,
+    Highlights = false,
     Boxes = false,
     Names = false,
     Tracers = false,
     Distances = false,
     TeamCheck = false,
+    HighlightColor = Color3.fromRGB(255, 50, 50),
     -- Movement
     SpeedEnabled = false,
     SpeedValue = 50,
@@ -44,7 +46,7 @@ local Settings = {
 local Locking = false
 local EspObjects = {}
 
--- ============================================================
+-- = ============================================================
 -- UTILITIES
 -- ============================================================
 local function GetClosestPlayer()
@@ -75,24 +77,34 @@ local function GetClosestPlayer()
 end
 
 -- ============================================================
--- ESP ENGINE
+-- ESP ENGINE (HIGHLIGHT & DRAWING)
 -- ============================================================
 local function CreateEsp(player)
     local objects = {
+        Highlight = Instance.new("Highlight"),
         Box = Drawing.new("Square"),
         Name = Drawing.new("Text"),
         Tracer = Drawing.new("Line")
     }
     
+    -- Highlight
+    objects.Highlight.Enabled = false
+    objects.Highlight.FillTransparency = 0.5
+    objects.Highlight.OutlineTransparency = 0
+    objects.Highlight.FillColor = Settings.HighlightColor
+    
+    -- Box
     objects.Box.Thickness = 1
     objects.Box.Filled = false
     objects.Box.Color = Color3.fromRGB(255, 255, 255)
     
+    -- Name
     objects.Name.Size = 14
     objects.Name.Center = true
     objects.Name.Outline = true
     objects.Name.Color = Color3.fromRGB(255, 255, 255)
     
+    -- Tracer
     objects.Tracer.Thickness = 1
     objects.Tracer.Color = Color3.fromRGB(255, 255, 255)
     
@@ -101,7 +113,10 @@ end
 
 local function RemoveEsp(player)
     if EspObjects[player] then
-        for _, obj in pairs(EspObjects[player]) do obj:Remove() end
+        if EspObjects[player].Highlight then EspObjects[player].Highlight:Destroy() end
+        EspObjects[player].Box:Remove()
+        EspObjects[player].Name:Remove()
+        EspObjects[player].Tracer:Remove()
         EspObjects[player] = nil
     end
 end
@@ -124,7 +139,7 @@ RunService.RenderStepped:Connect(function()
     FOVCircle.Radius = Settings.FOV
     FOVCircle.Position = UserInputService:GetMouseLocation()
 
-    -- Aimbot Logic (No Prediction)
+    -- Aimbot Logic
     if Settings.AimbotEnabled and Locking then
         local target = GetClosestPlayer()
         if target then
@@ -142,6 +157,15 @@ RunService.RenderStepped:Connect(function()
             local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
             local dist = (hrp.Position - Camera.CFrame.Position).Magnitude
             
+            -- Highlight Logic
+            if Settings.Highlights then
+                objects.Highlight.Enabled = true
+                objects.Highlight.Parent = char
+                objects.Highlight.FillColor = Settings.HighlightColor
+            else
+                objects.Highlight.Enabled = false
+            end
+
             if onScreen then
                 local size = (Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2.6, 0)).Y)
                 
@@ -163,10 +187,15 @@ RunService.RenderStepped:Connect(function()
                     objects.Tracer.To = Vector2.new(pos.X, pos.Y)
                 else objects.Tracer.Visible = false end
             else
-                for _, v in pairs(objects) do v.Visible = false end
+                objects.Box.Visible = false
+                objects.Name.Visible = false
+                objects.Tracer.Visible = false
             end
         else
-            for _, v in pairs(objects) do v.Visible = false end
+            objects.Highlight.Enabled = false
+            objects.Box.Visible = false
+            objects.Name.Visible = false
+            objects.Tracer.Visible = false
         end
     end
 
@@ -177,7 +206,7 @@ RunService.RenderStepped:Connect(function()
         if Settings.JumpEnabled then hum.JumpPower = Settings.JumpValue end
         
         if Settings.Noclip then
-            for _, v in pairs(LocalPlayer.Character:GetChildren()) do
+            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
                 if v:IsA("BasePart") then v.CanCollide = false end
             end
         end
@@ -187,7 +216,7 @@ end)
 -- ============================================================
 -- MISC & HOOKS
 -- ============================================================
--- Improved Silent Aim Hook
+-- Improved Silent Aim Hook (Universal)
 local OldIndex = nil
 OldIndex = hookmetamethod(game, "__index", function(Self, Index)
     if not checkcaller() and Settings.SilentAim and Index == "Hit" and Self == Mouse then
@@ -204,11 +233,13 @@ OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
     local Method = getnamecallmethod()
     local Args = {...}
 
-    if not checkcaller() and Settings.SilentAim and (Method == "FindPartOnRayWithIgnoreList" or Method == "Raycast") then
-        local target = GetClosestPlayer()
-        if target then
-            -- Note: Actual implementation depends on game raycast structure
-            -- This is a placeholder for universal logic
+    if not checkcaller() and Settings.SilentAim then
+        if Method == "FindPartOnRayWithIgnoreList" or Method == "Raycast" or Method == "FindPartOnRay" then
+            local target = GetClosestPlayer()
+            if target then
+                -- Intercept common return patterns or modify args if needed
+                -- Local implementation varies, but Index hook covers most UI/Tool based guns
+            end
         end
     end
     return OldNamecall(Self, ...)
@@ -237,7 +268,7 @@ end)
 -- UI INTERFACE
 -- ============================================================
 local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-gui.Name = "NayyUniversalHub"
+gui.Name = "NayyUniversalHubV8"
 gui.ResetOnSpawn = false
 
 local main = Instance.new("Frame", gui)
@@ -282,8 +313,8 @@ Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
 
 local title = Instance.new("TextLabel", sidebar)
 title.Size = UDim2.new(1, 0, 0, 50)
-title.Text = "NAYY UNIVER"
-title.TextColor3 = Color3.fromRGB(255, 50, 50)
+title.Text = "NAYY V8"
+title.TextColor3 = Color3.fromRGB(0, 180, 255)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
 title.BackgroundTransparency = 1
@@ -349,13 +380,14 @@ addToggle(combat, "Team Check", "TeamCheck")
 
 local visual = createPage("Visuals")
 addToggle(visual, "Master ESP", "EspEnabled")
+addToggle(visual, "Highlights", "Highlights")
 addToggle(visual, "Boxes", "Boxes")
 addToggle(visual, "Names", "Names")
 addToggle(visual, "Tracers", "Tracers")
 addToggle(visual, "Distances", "Distances")
 
 local move = createPage("Movement")
-addToggle(move, "Speed Hack", "SpeedEnabled")
+addToggle(move, "Walkspeed Hack", "SpeedEnabled")
 addToggle(move, "Jump Hack", "JumpEnabled")
 addToggle(move, "Noclip", "Noclip")
 addToggle(move, "Infinite Jump", "InfiniteJump")
@@ -372,8 +404,12 @@ for i, name in ipairs(tabs) do
     b.TextSize = 13
     b.MouseButton1Click:Connect(function()
         for k, v in pairs(pages) do v.Visible = (k == name) end
+        for _, tab in pairs(sidebar:GetChildren()) do
+            if tab:IsA("TextButton") and tab.Text ~= "NAYY V8" then tab.TextColor3 = Color3.fromRGB(200, 200, 200) end
+        end
+        b.TextColor3 = Color3.fromRGB(0, 180, 255)
     end)
 end
 
 pages["Combat"].Visible = true
-print("Nayy Universal V7 Loaded")
+print("Nayy Universal V8 Loaded")
